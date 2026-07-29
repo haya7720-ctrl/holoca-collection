@@ -41,11 +41,7 @@ except Exception as e:
 # ==========================================
 # 🍪 クッキーマネージャーの設定
 # ==========================================
-@st.cache_resource
-def get_cookie_manager():
-    return stx.CookieManager(key="cookie_manager")
-
-cookie_manager = get_cookie_manager()
+cookie_manager = stx.CookieManager(key="cookie_manager")
 
 # ==========================================
 # 🔐 ログイン機能のブロック
