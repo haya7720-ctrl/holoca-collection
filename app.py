@@ -124,8 +124,8 @@ def sync_cards_to_db(local_cards):
         st.sidebar.error(f"カード情報の同期エラー: {e}")
 
 def fetch_collection_from_db():
-    if st.session_state.user is None: return {}, []
     """データベース(collectionテーブル)からログイン中ユーザーの所持枚数とお気に入りを取得する"""
+    if st.session_state.user is None: return {}, []
     try:
         uid = st.session_state.user.id
         response = supabase.table("collection").select("*").eq("user_id", uid).execute()
@@ -146,8 +146,8 @@ def fetch_collection_from_db():
         return {}, []
 
 def update_collection_in_db(card_id, owned_count=None, is_favorite=None):
-    if st.session_state.user is None: return False
     """特定のカードの所持枚数またはお気に入り状態をデータベースに保存する"""
+    if st.session_state.user is None: return False
     try:
         uid = st.session_state.user.id
         res = supabase.table("collection").select("*").eq("card_id", card_id).eq("user_id", uid).execute()
