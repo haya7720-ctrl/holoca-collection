@@ -44,85 +44,49 @@ except Exception as e:
 cookie_manager = stx.CookieManager(key="cookie_manager")
 
 # ==========================================
-# 🔐 ログイン機能のブロック
+# 🔐 認証状態の確認
 # ==========================================
 if "user" not in st.session_state:
     st.session_state.user = None
 
-# 🌟 Cookieからログイン情報（トークン）を取得し、あれば自動ログインする
 access_token = cookie_manager.get(cookie="supabase_token")
 if access_token and st.session_state.user is None:
     try:
         res = supabase.auth.get_user(access_token)
         st.session_state.user = res.user
     except Exception:
-        pass # トークンが無効・期限切れの場合は何もしない
+        pass
 
-# まだログインしていない場合は、ログイン画面を表示してここで処理を止める
+# ==========================================
+# 👤 サイドバー上部のユーザー表示切替
+# ==========================================
 if st.session_state.user is None:
-    st.title("ホロカ専用カードコレクション")
-    st.info("このアプリを利用するには、ログインまたは新規登録が必要です。")
-    
-    email = st.text_input("メールアドレス")
-    password = st.text_input("パスワード", type="password")
-    
-    # 🌟 追加：前後の見えないスペース（空白）を自動で削除する
-    clean_email = email.strip()
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("ログイン"):
-            try:
-                # 🌟 email を clean_email に変更
-                response = supabase.auth.sign_in_with_password({"email": clean_email, "password": password})
-                st.session_state.user = response.user
-                
-                cookie_manager.set("supabase_token", response.session.access_token, max_age=60*60*24*30)
-                time.sleep(1)
-                st.rerun() 
-            except Exception as e:
-                # 🌟 エラーの本当の原因（詳細）も一緒に表示するように変更
-                st.error(f"ログインに失敗しました。(詳細: {e})")
-                
-    with col2:
-        if st.button("新規登録"):
-            try:
-                # 🌟 email を clean_email に変更
-                response = supabase.auth.sign_up({"email": clean_email, "password": password})
-                st.success("登録が完了しました！もう一度「ログイン」ボタンを押してください。")
-            except Exception as e:
-                st.error(f"登録に失敗しました。(詳細: {e})")
-                
-    # ログインしていない時はこれより下の画面を表示させない
-    st.stop()
+    st.sidebar.write("👤 ゲスト さん")
+    if st.sidebar.button("ログイン / 新規登録", type="primary"):
+        st.session_state.current_view = "login"
+        st.query_params["view"] = "login"
+        st.rerun()
+else:
+    display_name = st.session_state.user.user_metadata.get("display_name")
+    if not display_name:
+        display_name = st.session_state.user.email
+    st.sidebar.write(f"👤 {display_name} さん")
+    if st.sidebar.button("ログアウト"):
+        supabase.auth.sign_out()
+        st.session_state.user = None
+        cookie_manager.delete("supabase_token")
+        time.sleep(1)
+        st.session_state.current_view = "all_cards"
+        st.rerun()
 
-# ==========================================
-# 🔓 ログイン成功後の画面（これまでのアプリ画面）
-# ==========================================
-display_name = st.session_state.user.user_metadata.get("display_name")
-if not display_name:
-    display_name = st.session_state.user.email
-
-st.sidebar.write(f"👤 {display_name} さん")
-
-if st.sidebar.button("ログアウト"):
-    supabase.auth.sign_out()
-    st.session_state.user = None
-    # 🌟 ログアウト時にCookie（証明書）を破棄する
-    cookie_manager.delete("supabase_token")
-    time.sleep(1)
-    st.rerun()
-# --- この下から、これまでのカード一覧などのコードが続きます ---
 # ==========================================
 # ★ データベース（Supabase）との通信関数群 ★
 # ==========================================
 
-# --- 1. カード基本情報の同期 ---
 def sync_cards_to_db(local_cards):
     """CSVのカード情報をデータベース(cardsテーブル)に登録・更新する"""
     if not local_cards: return
     try:
-        # SupabaseのcardsテーブルはIDが主キー。既にある場合は更新する(upsert)
         for card in local_cards:
             data = {
                 "id": card["id"],
@@ -136,14 +100,11 @@ def sync_cards_to_db(local_cards):
     except Exception as e:
         st.sidebar.error(f"カード情報の同期エラー: {e}")
 
-# --- 2. 所持枚数＆お気に入りの取得（自分専用に書き換え！） ---
 def fetch_collection_from_db():
+    if st.session_state.user is None: return {}, []
     """データベース(collectionテーブル)からログイン中ユーザーの所持枚数とお気に入りを取得する"""
     try:
-        # 🌟 ログイン中のユーザーIDを取得
         uid = st.session_state.user.id
-        
-        # 🌟 .eq("user_id", uid) で、自分のデータだけを引っ張ってくる！
         response = supabase.table("collection").select("*").eq("user_id", uid).execute()
         
         collection_dict = {}
@@ -161,18 +122,14 @@ def fetch_collection_from_db():
         st.error(f"データ取得エラー: {e}")
         return {}, []
 
-# --- 3. 所持枚数＆お気に入りの更新（自分専用に書き換え！） ---
 def update_collection_in_db(card_id, owned_count=None, is_favorite=None):
+    if st.session_state.user is None: return False
     """特定のカードの所持枚数またはお気に入り状態をデータベースに保存する"""
     try:
-        # 🌟 ログイン中のユーザーIDを取得
         uid = st.session_state.user.id
-        
-        # 現在の自分のデータを取得
         res = supabase.table("collection").select("*").eq("card_id", card_id).eq("user_id", uid).execute()
         current_data = res.data[0] if res.data else {"card_id": card_id, "user_id": uid, "owned_count": 0, "is_favorite": False}
         
-        # 変更点をマージ（ユーザーIDも含めて保存する）
         new_data = {
             "user_id": uid,
             "card_id": card_id,
@@ -181,14 +138,12 @@ def update_collection_in_db(card_id, owned_count=None, is_favorite=None):
             "updated_at": datetime.now().isoformat()
         }
         
-        # データベースに保存
         supabase.table("collection").upsert(new_data).execute()
         return True
     except Exception as e:
         st.error(f"保存エラー: {e}")
         return False
 
-# --- 4. 価格キャッシュの取得 ---
 def fetch_prices_from_db():
     """データベース(pricesテーブル)から価格情報を取得する"""
     try:
@@ -196,12 +151,9 @@ def fetch_prices_from_db():
         price_cache = {}
         for row in response.data:
             cid = row["card_id"]
-            
-            # DBのタイムスタンプを文字列に変換して取り出す
             last_up = row.get("last_updated")
             if last_up:
                 try:
-                    # ISOフォーマットなどを読みやすい形に変換
                     dt = datetime.fromisoformat(last_up.replace('Z', '+00:00'))
                     last_up_str = dt.strftime("%Y-%m-%d %H:%M:%S")
                 except:
@@ -219,7 +171,6 @@ def fetch_prices_from_db():
     except Exception:
         return {}
 
-# --- 5. 価格キャッシュの更新 ---
 def update_price_in_db(card_id, yuyu_s, yuyu_b, tore_s, tore_b, full_s, full_b):
     """特定のカードの最新価格をデータベースに保存する"""
     try:
@@ -241,7 +192,6 @@ def update_price_in_db(card_id, yuyu_s, yuyu_b, tore_s, tore_b, full_s, full_b):
 if "view" not in st.session_state:
     st.session_state.current_view = st.query_params.get("view", "all_cards")
 
-# 初回のみデータベースからデータを読み込む
 if "data_loaded" not in st.session_state:
     with st.spinner("データベースからコレクションを読み込んでいます..."):
         db_collection, db_favorites = fetch_collection_from_db()
@@ -262,8 +212,6 @@ def load_card_database():
             required_columns = ['id', 'full_name', 'img_path']
             if not all(col in df.columns for col in required_columns):
                 return []
-            
-            # Nanを空文字に置換
             df = df.fillna("")
             cards = df.to_dict(orient="records")
             return cards
@@ -273,7 +221,6 @@ def load_card_database():
 
 card_db = load_card_database()
 
-# 起動時にローカルのCSVとデータベースのカード情報を同期（裏側で実行）
 if "cards_synced" not in st.session_state and card_db:
     sync_cards_to_db(card_db)
     st.session_state.cards_synced = True
@@ -384,7 +331,6 @@ st.markdown(
     header[data-testid="stHeader"] { background-color: transparent !important; }
     [data-testid="collapsedControl"], [data-testid="stSidebarCollapseButton"] { display: none !important; }
 
-    /* 🌟ここから下が修正箇所：検索バー"だけ"を対象にするように変更🌟 */
     div[data-testid="stTextInput"]:has(input[placeholder="カード名・タレント名で検索"]) {
         position: fixed !important; top: 12px !important; left: calc(18rem + 30px) !important; 
         width: 420px !important; z-index: 9999999 !important; 
@@ -429,22 +375,26 @@ with st.sidebar:
     )
     st.divider()
     
-    def render_menu(label, target_view):
+    def render_menu(label, target_view, requires_login=False):
         is_selected = (st.session_state.current_view == target_view)
         btn_type = "primary" if is_selected else "secondary"
         
         if st.button(label, key=f"menu_{target_view}", type=btn_type):
-            st.query_params["view"] = target_view
-            st.session_state.current_view = target_view
-            if "global_search" in st.session_state:
-                st.session_state.global_search = ""
+            if requires_login and st.session_state.user is None:
+                st.session_state.current_view = "login"
+                st.query_params["view"] = "login"
+            else:
+                st.query_params["view"] = target_view
+                st.session_state.current_view = target_view
+                if "global_search" in st.session_state:
+                    st.session_state.global_search = ""
             st.rerun()
 
     render_menu("カード一覧", "all_cards")
-    render_menu("コレクション一覧", "home")
-    render_menu("資産総額", "assets")
-    render_menu("お気に入り", "favorite")
-    render_menu("設定", "setting")
+    render_menu("コレクション一覧", "home", requires_login=True)
+    render_menu("資産総額", "assets", requires_login=True)
+    render_menu("お気に入り", "favorite", requires_login=True)
+    render_menu("設定", "setting", requires_login=True)
     render_menu("ヘルプ", "help")
 
 # ==========================================
@@ -499,7 +449,12 @@ header_data = {
         "title": "カード詳細",
         "desc": "選択したカードの詳細情報と現在の相場です。",
         "icon": '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>'
-    }
+    },
+    "login": {
+        "title": "ログイン / 新規登録",
+        "desc": "コレクションの管理や資産計算を行うにはログインが必要です。",
+        "icon": '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>'
+    },
 }
 
 current_info = header_data.get(st.session_state.current_view, header_data["all_cards"])
@@ -581,10 +536,12 @@ def render_card_grid(cards_to_show, view_prefix, search_term=""):
                     
                     with c_minus:
                         if st.button("－", key=f"minus_{view_prefix}_{cid}", use_container_width=True):
-                            if current_count > 0:
+                            if st.session_state.user is None:
+                                st.session_state.current_view = "login" 
+                                st.rerun()
+                            elif current_count > 0:
                                 new_count = current_count - 1
                                 st.session_state.collection[cid] = new_count
-                                # DBに保存
                                 update_collection_in_db(cid, owned_count=new_count)
                                 st.rerun()
                                 
@@ -593,11 +550,14 @@ def render_card_grid(cards_to_show, view_prefix, search_term=""):
                         
                     with c_plus:
                         if st.button("＋", key=f"plus_{view_prefix}_{cid}", use_container_width=True):
-                            new_count = current_count + 1
-                            st.session_state.collection[cid] = new_count
-                            # DBに保存
-                            update_collection_in_db(cid, owned_count=new_count)
-                            st.rerun()
+                            if st.session_state.user is None:
+                                st.session_state.current_view = "login" 
+                                st.rerun()
+                            else:
+                                new_count = current_count + 1
+                                st.session_state.collection[cid] = new_count
+                                update_collection_in_db(cid, owned_count=new_count)
+                                st.rerun()
                             
                     st.markdown('<div style="height: 15px;"></div>', unsafe_allow_html=True)
 
@@ -605,7 +565,36 @@ def render_card_grid(cards_to_show, view_prefix, search_term=""):
 # メイン画面の表示
 # ==========================================
 
-if st.session_state.current_view == "all_cards":
+if st.session_state.current_view == "login":
+    st.info("💡 アプリのすべての機能を利用するにはログインしてください。")
+    
+    email = st.text_input("メールアドレス")
+    password = st.text_input("パスワード", type="password")
+    clean_email = email.strip()
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("ログイン"):
+            try:
+                response = supabase.auth.sign_in_with_password({"email": clean_email, "password": password})
+                st.session_state.user = response.user
+                cookie_manager.set("supabase_token", response.session.access_token, max_age=60*60*24*30)
+                time.sleep(1)
+                st.session_state.current_view = "all_cards" 
+                st.rerun()
+            except Exception as e:
+                st.error(f"ログインに失敗しました。(詳細: {e})")
+                
+    with col2:
+        if st.button("新規登録"):
+            try:
+                response = supabase.auth.sign_up({"email": clean_email, "password": password})
+                st.success("登録が完了しました！もう一度「ログイン」ボタンを押してください。")
+            except Exception as e:
+                st.error(f"登録に失敗しました。(詳細: {e})")
+
+elif st.session_state.current_view == "all_cards":
+
     unique_rarities = set()
     for c in card_db:
         r = c.get("rarity")
@@ -616,7 +605,6 @@ if st.session_state.current_view == "all_cards":
     col_head, col_filter = st.columns([0.8, 0.2], gap="large")
     with col_head:
         st.subheader("すべてのカード一覧")
-        # 🌟 指定いただいたテキストに変更！
         st.write("ホロライブOCGのレアリティがOSR以上のカードを表示しています。カード画像をクリックすると詳細・相場情報を確認できます。")
     with col_filter:
         selected_rarity = st.selectbox("レアリティ", rarity_options, key="all_rarity_filter")
@@ -663,9 +651,6 @@ elif st.session_state.current_view == "home":
                 
             render_card_grid(cards_to_show, "home", search_term=search_query)
 
-# ==========================================
-# ★ 資産総額 画面（DB連携版）
-# ==========================================
 elif st.session_state.current_view == "assets":
     st.subheader("資産総額（推定）")
     st.write("所持しているカードの買取価格の平均値をもとに、現在の推定資産を計算しています。")
@@ -691,7 +676,6 @@ elif st.session_state.current_view == "assets":
                         tore_sell, tore_buy = scraper.scrape_torecolo(card_info["id"], card_info.get("rarity", ""))
                         full_sell, full_buy = scraper.scrape_fullahead(card_info.get("fullahead_url", ""))
                         
-                        # DBに保存し、SessionStateも更新
                         update_price_in_db(cid, yuyu_sell, yuyu_buy, tore_sell, tore_buy, full_sell, full_buy)
                         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         st.session_state.price_cache[cid] = {
@@ -780,9 +764,6 @@ elif st.session_state.current_view == "favorite":
         else:
             render_card_grid(fav_cards, "fav", search_term=search_query)
 
-# ==========================================
-# ★詳細画面（DB連携版）
-# ==========================================
 elif st.session_state.current_view == "detail":
     if st.button("← カード一覧に戻る", key="back_to_home"):
         st.query_params["view"] = "all_cards"
@@ -807,13 +788,18 @@ elif st.session_state.current_view == "detail":
             fav_label = "★ お気に入り解除" if is_fav else "☆ お気に入り登録"
             
             if st.button(fav_label):
-                if is_fav:
-                    st.session_state.favorites.remove(selected_card_id)
-                    update_collection_in_db(selected_card_id, is_favorite=False)
+                if st.session_state.user is None:
+                    st.session_state.current_view = "login"
+                    st.query_params["view"] = "login"
+                    st.rerun()
                 else:
-                    st.session_state.favorites.append(selected_card_id)
-                    update_collection_in_db(selected_card_id, is_favorite=True)
-                st.rerun() 
+                    if is_fav:
+                        st.session_state.favorites.remove(selected_card_id)
+                        update_collection_in_db(selected_card_id, is_favorite=False)
+                    else:
+                        st.session_state.favorites.append(selected_card_id)
+                        update_collection_in_db(selected_card_id, is_favorite=True)
+                    st.rerun() 
 
         st.markdown(
             f"""
@@ -867,7 +853,6 @@ elif st.session_state.current_view == "detail":
                     tore_sell, tore_buy = scraper.scrape_torecolo(selected_card["id"], selected_card.get("rarity", ""))
                     full_sell, full_buy = scraper.scrape_fullahead(selected_card.get("fullahead_url", ""))
 
-                    # DBに保存し、SessionStateも更新
                     update_price_in_db(selected_card_id, yuyu_sell, yuyu_buy, tore_sell, tore_buy, full_sell, full_buy)
                     
                     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -891,7 +876,6 @@ elif st.session_state.current_view == "setting":
     
     st.markdown("#### 👤 ユーザー情報の変更")
     
-    # 現在の表示名を取得
     current_name = st.session_state.user.user_metadata.get("display_name", "")
     
     new_name = st.text_input("表示名（ニックネーム）", value=current_name, placeholder="例：ホロカ太郎")
@@ -901,11 +885,9 @@ elif st.session_state.current_view == "setting":
             st.warning("表示名を入力してください。")
         else:
             try:
-                # 🌟 Supabaseのユーザーデータ（メタデータ）を更新
                 res = supabase.auth.update_user({
                     "data": {"display_name": new_name}
                 })
-                # セッション情報も最新に書き換えて画面をリロード
                 st.session_state.user = res.user
                 st.success("表示名を更新しました！")
                 time.sleep(1)
