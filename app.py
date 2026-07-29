@@ -77,7 +77,13 @@ if st.session_state.user is None:
 # ==========================================
 # 🔓 ログイン成功後の画面（これまでのアプリ画面）
 # ==========================================
-st.sidebar.write(f"👤 {st.session_state.user.email} さん")
+# 🌟 ユーザーデータから表示名を取得（なければメールアドレス）
+display_name = st.session_state.user.user_metadata.get("display_name")
+if not display_name:
+    display_name = st.session_state.user.email
+
+st.sidebar.write(f"👤 {display_name} さん")
+
 if st.sidebar.button("ログアウト"):
     supabase.auth.sign_out()
     st.session_state.user = None
@@ -853,7 +859,32 @@ elif st.session_state.current_view == "detail":
 
 elif st.session_state.current_view == "setting":
     st.subheader("設定")
-    st.write("アプリの各種設定が表示されます。（準備中）")
+    st.write("アプリの各種設定を行います。")
+    st.divider()
+    
+    st.markdown("#### 👤 ユーザー情報の変更")
+    
+    # 現在の表示名を取得
+    current_name = st.session_state.user.user_metadata.get("display_name", "")
+    
+    new_name = st.text_input("表示名（ニックネーム）", value=current_name, placeholder="例：ホロカ太郎")
+    
+    if st.button("変更を保存", type="primary"):
+        if new_name.strip() == "":
+            st.warning("表示名を入力してください。")
+        else:
+            try:
+                # 🌟 Supabaseのユーザーデータ（メタデータ）を更新
+                res = supabase.auth.update_user({
+                    "data": {"display_name": new_name}
+                })
+                # セッション情報も最新に書き換えて画面をリロード
+                st.session_state.user = res.user
+                st.success("表示名を更新しました！")
+                time.sleep(1)
+                st.rerun()
+            except Exception as e:
+                st.error(f"更新に失敗しました: {e}")
 
 elif st.session_state.current_view == "help":
     st.subheader("ヘルプ")
