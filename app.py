@@ -189,7 +189,7 @@ def update_price_in_db(card_id, yuyu_s, yuyu_b, tore_s, tore_b, full_s, full_b):
 # ==========================================
 # 状態管理（Session State）の初期化
 # ==========================================
-if "view" not in st.session_state:
+if "current_view" not in st.session_state:
     st.session_state.current_view = st.query_params.get("view", "all_cards")
 
 if "data_loaded" not in st.session_state:
@@ -574,16 +574,17 @@ if st.session_state.current_view == "login":
     
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("ログイン"):
-            try:
-                response = supabase.auth.sign_in_with_password({"email": clean_email, "password": password})
-                st.session_state.user = response.user
-                cookie_manager.set("supabase_token", response.session.access_token, max_age=60*60*24*30)
-                time.sleep(1)
-                st.session_state.current_view = "all_cards" 
-                st.rerun()
-            except Exception as e:
-                st.error(f"ログインに失敗しました。(詳細: {e})")
+            if st.button("ログイン"):
+                try:
+                    response = supabase.auth.sign_in_with_password({"email": clean_email, "password": password})
+                    st.session_state.user = response.user
+                    cookie_manager.set("supabase_token", response.session.access_token, max_age=60*60*24*30)
+                    time.sleep(1)
+                    st.session_state.current_view = "all_cards" 
+                    st.query_params["view"] = "all_cards" # 🌟 追加：URLも「カード一覧」に書き換える
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"ログインに失敗しました。(詳細: {e})")
                 
     with col2:
         if st.button("新規登録"):
