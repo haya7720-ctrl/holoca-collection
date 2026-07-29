@@ -1,3 +1,4 @@
+import streamlit.components.v1 as components
 import streamlit as st
 import pandas as pd
 import time
@@ -42,6 +43,28 @@ except Exception as e:
 # 🍪 クッキーマネージャーの設定
 # ==========================================
 cookie_manager = stx.CookieManager(key="cookie_manager")
+
+# 🌟 ここに追加：キーボードショートカット（Cキー）の誤爆を防止する
+components.html(
+    """
+    <script>
+    const doc = window.parent.document;
+    doc.addEventListener('keydown', function(e) {
+        // 検索バーなどで文字入力中の場合は邪魔しない
+        const active = doc.activeElement;
+        const isInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+        
+        // Cキー単独押しの時だけ無効化する（Ctrl/Cmdとの同時押し＝コピーは許可）
+        if (!isInput && (e.key === 'c' || e.key === 'C') && !e.ctrlKey && !e.metaKey) {
+            e.stopPropagation();
+            e.preventDefault();
+        }
+    }, true);
+    </script>
+    """,
+    height=0,
+    width=0,
+)
 
 # ==========================================
 # 🔐 認証状態の確認
@@ -362,7 +385,7 @@ st.markdown(
 
     .sticky-header-bg { position: fixed; top: 0; left: 18rem; right: 0; height: 200px; background-color: #FFFFFF; z-index: 99998; border-bottom: 2px solid #e2e8f0; }
     .sticky-title-container { position: fixed; top: 90px; left: calc(18rem + 30px); z-index: 99999; display: flex; align-items: center; gap: 16px; }
-    
+
     /* 🌟 追加：右上の「⋮」メニュー（ツールバー）を完全に非表示にする */
     [data-testid="stToolbar"] {
         display: none !important;
