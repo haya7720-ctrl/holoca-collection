@@ -36,7 +36,54 @@ try:
 except Exception as e:
     st.error("データベース（Supabase）の接続に失敗しました。secrets.tomlの設定を確認してください。")
     st.stop()
+    
+# ==========================================
+# 🔐 ログイン機能のブロック
+# ==========================================
+if "user" not in st.session_state:
+    st.session_state.user = None
 
+# まだログインしていない場合は、ログイン画面を表示してここで処理を止める
+if st.session_state.user is None:
+    st.title("ホロカ専用カードコレクション")
+    st.info("このアプリを利用するには、ログインまたは新規登録が必要です。")
+    
+    email = st.text_input("メールアドレス")
+    password = st.text_input("パスワード", type="password")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("ログイン"):
+            try:
+                # Supabaseでログイン処理
+                response = supabase.auth.sign_in_with_password({"email": email, "password": password})
+                st.session_state.user = response.user
+                st.rerun() # 画面をリロードしてログイン状態にする
+            except Exception as e:
+                st.error("ログインに失敗しました。アドレスかパスワードが間違っています。")
+                
+    with col2:
+        if st.button("新規登録"):
+            try:
+                # Supabaseで新規アカウント作成
+                response = supabase.auth.sign_up({"email": email, "password": password})
+                st.success("登録が完了しました！もう一度「ログイン」ボタンを押してください。")
+            except Exception as e:
+                st.error("登録に失敗しました。（すでに登録されているか、パスワードが短すぎます）")
+                
+    # ログインしていない時はこれより下の画面（カード一覧など）を表示させない
+    st.stop()
+
+# ==========================================
+# 🔓 ログイン成功後の画面（これまでのアプリ画面）
+# ==========================================
+st.sidebar.write(f"👤 {st.session_state.user.email} さん")
+if st.sidebar.button("ログアウト"):
+    supabase.auth.sign_out()
+    st.session_state.user = None
+    st.rerun()
+
+# --- この下から、これまでのカード一覧などのコードが続きます ---
 # ==========================================
 # ★ データベース（Supabase）との通信関数群 ★
 # ==========================================
