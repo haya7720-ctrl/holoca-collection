@@ -362,6 +362,11 @@ st.markdown(
 
     .sticky-header-bg { position: fixed; top: 0; left: 18rem; right: 0; height: 200px; background-color: #FFFFFF; z-index: 99998; border-bottom: 2px solid #e2e8f0; }
     .sticky-title-container { position: fixed; top: 90px; left: calc(18rem + 30px); z-index: 99999; display: flex; align-items: center; gap: 16px; }
+    
+    /* 🌟 追加：右上の「⋮」メニュー（ツールバー）を完全に非表示にする */
+    [data-testid="stToolbar"] {
+        display: none !important;
+    }
     </style>
     """,
     unsafe_allow_html=True
