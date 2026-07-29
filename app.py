@@ -8,6 +8,7 @@ import json
 import re
 from datetime import datetime
 import scraper
+import extra_streamlit_components as stx
 
 # === Supabase連携用ライブラリのインポート ===
 from supabase import create_client, Client
@@ -38,10 +39,28 @@ except Exception as e:
     st.stop()
 
 # ==========================================
+# 🍪 クッキーマネージャーの設定
+# ==========================================
+@st.cache_resource
+def get_cookie_manager():
+    return stx.CookieManager(key="cookie_manager")
+
+cookie_manager = get_cookie_manager()
+
+# ==========================================
 # 🔐 ログイン機能のブロック
 # ==========================================
 if "user" not in st.session_state:
     st.session_state.user = None
+
+# 🌟 Cookieからログイン情報（トークン）を取得し、あれば自動ログインする
+access_token = cookie_manager.get(cookie="supabase_token")
+if access_token and st.session_state.user is None:
+    try:
+        res = supabase.auth.get_user(access_token)
+        st.session_state.user = res.user
+    except Exception:
+        pass # トークンが無効・期限切れの場合は何もしない
 
 # まだログインしていない場合は、ログイン画面を表示してここで処理を止める
 if st.session_state.user is None:
@@ -58,26 +77,28 @@ if st.session_state.user is None:
                 # Supabaseでログイン処理
                 response = supabase.auth.sign_in_with_password({"email": email, "password": password})
                 st.session_state.user = response.user
-                st.rerun() # 画面をリロードしてログイン状態にする
+                
+                # 🌟 ログイン成功時に、証明書（トークン）をCookieに保存する（有効期限30日）
+                cookie_manager.set("supabase_token", response.session.access_token, max_age=60*60*24*30)
+                time.sleep(1) # Cookieがブラウザに保存されるのを一瞬待つ
+                st.rerun() 
             except Exception as e:
                 st.error("ログインに失敗しました。アドレスかパスワードが間違っています。")
                 
     with col2:
         if st.button("新規登録"):
             try:
-                # Supabaseで新規アカウント作成
                 response = supabase.auth.sign_up({"email": email, "password": password})
                 st.success("登録が完了しました！もう一度「ログイン」ボタンを押してください。")
             except Exception as e:
                 st.error("登録に失敗しました。（すでに登録されているか、パスワードが短すぎます）")
                 
-    # ログインしていない時はこれより下の画面（カード一覧など）を表示させない
+    # ログインしていない時はこれより下の画面を表示させない
     st.stop()
 
 # ==========================================
 # 🔓 ログイン成功後の画面（これまでのアプリ画面）
 # ==========================================
-# 🌟 ユーザーデータから表示名を取得（なければメールアドレス）
 display_name = st.session_state.user.user_metadata.get("display_name")
 if not display_name:
     display_name = st.session_state.user.email
@@ -87,8 +108,10 @@ st.sidebar.write(f"👤 {display_name} さん")
 if st.sidebar.button("ログアウト"):
     supabase.auth.sign_out()
     st.session_state.user = None
+    # 🌟 ログアウト時にCookie（証明書）を破棄する
+    cookie_manager.delete("supabase_token")
+    time.sleep(1)
     st.rerun()
-
 # --- この下から、これまでのカード一覧などのコードが続きます ---
 # ==========================================
 # ★ データベース（Supabase）との通信関数群 ★
