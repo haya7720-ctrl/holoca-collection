@@ -66,28 +66,32 @@ if st.session_state.user is None:
     email = st.text_input("メールアドレス")
     password = st.text_input("パスワード", type="password")
     
+    # 🌟 追加：前後の見えないスペース（空白）を自動で削除する
+    clean_email = email.strip()
+    
     col1, col2 = st.columns(2)
     with col1:
         if st.button("ログイン"):
             try:
-                # Supabaseでログイン処理
-                response = supabase.auth.sign_in_with_password({"email": email, "password": password})
+                # 🌟 email を clean_email に変更
+                response = supabase.auth.sign_in_with_password({"email": clean_email, "password": password})
                 st.session_state.user = response.user
                 
-                # 🌟 ログイン成功時に、証明書（トークン）をCookieに保存する（有効期限30日）
                 cookie_manager.set("supabase_token", response.session.access_token, max_age=60*60*24*30)
-                time.sleep(1) # Cookieがブラウザに保存されるのを一瞬待つ
+                time.sleep(1)
                 st.rerun() 
             except Exception as e:
-                st.error("ログインに失敗しました。アドレスかパスワードが間違っています。")
+                # 🌟 エラーの本当の原因（詳細）も一緒に表示するように変更
+                st.error(f"ログインに失敗しました。(詳細: {e})")
                 
     with col2:
         if st.button("新規登録"):
             try:
-                response = supabase.auth.sign_up({"email": email, "password": password})
+                # 🌟 email を clean_email に変更
+                response = supabase.auth.sign_up({"email": clean_email, "password": password})
                 st.success("登録が完了しました！もう一度「ログイン」ボタンを押してください。")
             except Exception as e:
-                st.error("登録に失敗しました。（すでに登録されているか、パスワードが短すぎます）")
+                st.error(f"登録に失敗しました。(詳細: {e})")
                 
     # ログインしていない時はこれより下の画面を表示させない
     st.stop()
