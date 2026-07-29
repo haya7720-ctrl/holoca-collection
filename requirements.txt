@@ -3,3 +3,4 @@ pandas
 supabase
 requests
 beautifulsoup4
+extra-streamlit-components
