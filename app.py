@@ -361,15 +361,18 @@ st.markdown(
     header[data-testid="stHeader"] { background-color: transparent !important; }
     [data-testid="collapsedControl"], [data-testid="stSidebarCollapseButton"] { display: none !important; }
 
-    div[data-testid="stTextInput"] {
+    /* 🌟ここから下が修正箇所：検索バー"だけ"を対象にするように変更🌟 */
+    div[data-testid="stTextInput"]:has(input[placeholder="カード名・タレント名で検索"]) {
         position: fixed !important; top: 12px !important; left: calc(18rem + 30px) !important; 
         width: 420px !important; z-index: 9999999 !important; 
     }
-    div[data-testid="stTextInput"] > div, div[data-testid="stTextInput"] div[data-baseweb="base-input"], div[data-testid="stTextInput"] div[data-baseweb="input"] {
+    div[data-testid="stTextInput"]:has(input[placeholder="カード名・タレント名で検索"]) > div, 
+    div[data-testid="stTextInput"]:has(input[placeholder="カード名・タレント名で検索"]) div[data-baseweb="base-input"], 
+    div[data-testid="stTextInput"]:has(input[placeholder="カード名・タレント名で検索"]) div[data-baseweb="input"] {
         min-height: 54px !important; height: 54px !important;
         background-color: transparent !important; display: flex !important; align-items: center !important;
     }
-    div[data-testid="stTextInput"] input {
+    div[data-testid="stTextInput"]:has(input[placeholder="カード名・タレント名で検索"]) input {
         background-color: #FFFFFF !important; border: 1px solid #cbd5e1 !important; border-radius: 6px !important;
         min-height: 54px !important; height: 54px !important; padding: 0 14px 0 44px !important;
         font-size: 1rem !important; color: #1e293b !important; box-shadow: none !important;
@@ -377,8 +380,8 @@ st.markdown(
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'%3E%3C/circle%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'%3E%3C/line%3E%3C/svg%3E") !important;
         background-repeat: no-repeat !important; background-position: 14px center !important; transition: 0.2s;
     }
-    div[data-testid="stTextInput"] input::placeholder { color: #64748b !important; opacity: 1 !important; }
-    div[data-testid="stTextInput"] input:focus { border-color: #94a3b8 !important; }
+    div[data-testid="stTextInput"]:has(input[placeholder="カード名・タレント名で検索"]) input::placeholder { color: #64748b !important; opacity: 1 !important; }
+    div[data-testid="stTextInput"]:has(input[placeholder="カード名・タレント名で検索"]) input:focus { border-color: #94a3b8 !important; }
 
     .sticky-header-bg { position: fixed; top: 0; left: 18rem; right: 0; height: 200px; background-color: #FFFFFF; z-index: 99998; border-bottom: 2px solid #e2e8f0; }
     .sticky-title-container { position: fixed; top: 90px; left: calc(18rem + 30px); z-index: 99999; display: flex; align-items: center; gap: 16px; }
