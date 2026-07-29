@@ -36,7 +36,7 @@ try:
 except Exception as e:
     st.error("データベース（Supabase）の接続に失敗しました。secrets.tomlの設定を確認してください。")
     st.stop()
-    
+
 # ==========================================
 # 🔐 ログイン機能のブロック
 # ==========================================
@@ -107,11 +107,16 @@ def sync_cards_to_db(local_cards):
     except Exception as e:
         st.sidebar.error(f"カード情報の同期エラー: {e}")
 
-# --- 2. 所持枚数＆お気に入りの取得 ---
+# --- 2. 所持枚数＆お気に入りの取得（自分専用に書き換え！） ---
 def fetch_collection_from_db():
-    """データベース(collectionテーブル)から所持枚数とお気に入りを取得する"""
+    """データベース(collectionテーブル)からログイン中ユーザーの所持枚数とお気に入りを取得する"""
     try:
-        response = supabase.table("collection").select("*").execute()
+        # 🌟 ログイン中のユーザーIDを取得
+        uid = st.session_state.user.id
+        
+        # 🌟 .eq("user_id", uid) で、自分のデータだけを引っ張ってくる！
+        response = supabase.table("collection").select("*").eq("user_id", uid).execute()
+        
         collection_dict = {}
         favorites_list = []
         
@@ -123,19 +128,24 @@ def fetch_collection_from_db():
                 favorites_list.append(cid)
                 
         return collection_dict, favorites_list
-    except Exception:
+    except Exception as e:
+        st.error(f"データ取得エラー: {e}")
         return {}, []
 
-# --- 3. 所持枚数＆お気に入りの更新 ---
+# --- 3. 所持枚数＆お気に入りの更新（自分専用に書き換え！） ---
 def update_collection_in_db(card_id, owned_count=None, is_favorite=None):
     """特定のカードの所持枚数またはお気に入り状態をデータベースに保存する"""
     try:
-        # 現在のデータを取得
-        res = supabase.table("collection").select("*").eq("card_id", card_id).execute()
-        current_data = res.data[0] if res.data else {"card_id": card_id, "owned_count": 0, "is_favorite": False}
+        # 🌟 ログイン中のユーザーIDを取得
+        uid = st.session_state.user.id
         
-        # 変更点をマージ
+        # 現在の自分のデータを取得
+        res = supabase.table("collection").select("*").eq("card_id", card_id).eq("user_id", uid).execute()
+        current_data = res.data[0] if res.data else {"card_id": card_id, "user_id": uid, "owned_count": 0, "is_favorite": False}
+        
+        # 変更点をマージ（ユーザーIDも含めて保存する）
         new_data = {
+            "user_id": uid,
             "card_id": card_id,
             "owned_count": owned_count if owned_count is not None else current_data.get("owned_count", 0),
             "is_favorite": is_favorite if is_favorite is not None else current_data.get("is_favorite", False),
