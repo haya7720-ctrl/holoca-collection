@@ -192,13 +192,21 @@ def update_price_in_db(card_id, yuyu_s, yuyu_b, tore_s, tore_b, full_s, full_b):
 if "current_view" not in st.session_state:
     st.session_state.current_view = st.query_params.get("view", "all_cards")
 
-if "data_loaded" not in st.session_state:
-    with st.spinner("データベースからコレクションを読み込んでいます..."):
+# 🌟 追加：すでにログイン済みなのに「ログイン画面」にいる場合は、強制的にカード一覧へ移動
+if st.session_state.user is not None and st.session_state.current_view == "login":
+    st.session_state.current_view = "all_cards"
+    st.query_params["view"] = "all_cards"
+
+# 🌟 変更：アプリ起動時だけでなく、「ログイン・ログアウトで人が切り替わった時」にもデータを読み込み直す
+current_uid = st.session_state.user.id if st.session_state.user else "guest"
+
+if st.session_state.get("loaded_user_id") != current_uid:
+    with st.spinner("コレクションデータを同期中..."):
         db_collection, db_favorites = fetch_collection_from_db()
         st.session_state.collection = db_collection
         st.session_state.favorites = db_favorites
         st.session_state.price_cache = fetch_prices_from_db()
-        st.session_state.data_loaded = True
+        st.session_state.loaded_user_id = current_uid  # 誰のデータを読み込んだか記憶しておく
 
 # ==========================================
 # CSVファイルからカードデータベースを読み込む
