@@ -593,7 +593,8 @@ if st.session_state.current_view == "all_cards":
     col_head, col_filter = st.columns([0.8, 0.2], gap="large")
     with col_head:
         st.subheader("すべてのカード一覧")
-        st.write("ホロライブOCGの全カードを表示しています。カード画像をクリックすると詳細・相場情報を確認できます。")
+        # 🌟 指定いただいたテキストに変更！
+        st.write("ホロライブOCGのレアリティがOSR以上のカードを表示しています。カード画像をクリックすると詳細・相場情報を確認できます。")
     with col_filter:
         selected_rarity = st.selectbox("レアリティ", rarity_options, key="all_rarity_filter")
     
