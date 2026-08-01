@@ -209,6 +209,40 @@ def update_price_in_db(card_id, yuyu_s, yuyu_b, tore_s, tore_b, full_s, full_b):
     except Exception:
         return False
 
+# --- ここから新規追加：リクエスト処理用の関数 ---
+def submit_card_request(card_number, card_name):
+    """ユーザーからのカード追加申請をDBに送信する"""
+    if st.session_state.user is None: return False
+    try:
+        data = {
+            "user_id": st.session_state.user.id,
+            "card_number": card_number,
+            "card_name": card_name,
+            "status": "pending"
+        }
+        supabase.table("card_requests").insert(data).execute()
+        return True
+    except Exception as e:
+        st.error(f"送信エラー: {e}")
+        return False
+
+def fetch_pending_requests():
+    """未処理のリクエスト一覧を取得する（管理者用）"""
+    try:
+        res = supabase.table("card_requests").select("*").eq("status", "pending").order("created_at", desc=True).execute()
+        return res.data
+    except Exception as e:
+        return []
+
+def update_request_status(request_id, new_status):
+    """リクエストのステータスを変更する（管理者用）"""
+    try:
+        supabase.table("card_requests").update({"status": new_status}).eq("id", request_id).execute()
+        return True
+    except Exception as e:
+        return False
+# --- 新規追加ここまで ---
+
 # ==========================================
 # 状態管理（Session State）の初期化
 # ==========================================
@@ -433,6 +467,11 @@ with st.sidebar:
     render_menu("設定", "setting", requires_login=True)
     render_menu("ヘルプ", "help")
 
+    # 🌟 追加：Gojoさん専用の管理者メニュー（Gojoさんのアドレスの時だけ出現！）
+    if st.session_state.user and st.session_state.user.email == "haya7720@gmail.com":
+        st.divider()
+        render_menu("👑 管理者メニュー", "admin", requires_login=True)
+
 # ==========================================
 # 検索バーの表示制御
 # ==========================================
@@ -490,6 +529,12 @@ header_data = {
         "title": "ログイン / 新規登録",
         "desc": "コレクションの管理や資産計算を行うにはログインが必要です。",
         "icon": '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>'
+    },
+    # 🌟 ここに追加します！カンマ（,）を忘れずに！
+    "admin": {
+        "title": "管理者メニュー",
+        "desc": "ユーザーからのカード追加申請の確認と処理を行います。",
+        "icon": '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>'
     },
 }
 
@@ -935,3 +980,56 @@ elif st.session_state.current_view == "setting":
 elif st.session_state.current_view == "help":
     st.subheader("ヘルプ")
     st.write("使い方やよくある質問が表示されます。（準備中）")
+    st.divider()
+    
+    # 🌟 追加：カード追加申請フォーム
+    st.markdown("#### ✉️ 未収録カードの追加申請")
+    st.write("一覧にないカードがありましたら、以下のフォームよりお知らせください。")
+    
+    if st.session_state.user is None:
+        st.info("💡 カードの追加申請を行うにはログインが必要です。")
+    else:
+        with st.form("card_request_form"):
+            st.write("追加したいカードの情報を入力してください")
+            req_number = st.text_input("カード番号（必須）", placeholder="例：hBP01-001")
+            req_name = st.text_input("カード名 / タレント名（必須）", placeholder="例：兎田ぺこら")
+            
+            submitted = st.form_submit_button("申請を送信する", type="primary")
+            if submitted:
+                if req_number.strip() == "" or req_name.strip() == "":
+                    st.warning("カード番号とカード名は必ず入力してください。")
+                else:
+                    if submit_card_request(req_number.strip(), req_name.strip()):
+                        st.success("追加申請を送信しました！対応までしばらくお待ちください。")
+
+# 🌟 追加：Gojoさん専用の管理者画面
+elif st.session_state.current_view == "admin":
+    # 念のため、他の人がURLを直接打ち込んでも見れないようにブロック
+    if not (st.session_state.user and st.session_state.user.email == "haya7720@gmail.com"):
+        st.error("この画面にアクセスする権限がありません。")
+    else:
+        st.subheader("未処理のカード追加申請")
+        st.write("ユーザーから送られたカードの追加リクエスト一覧です。")
+        st.divider()
+        
+        pending_reqs = fetch_pending_requests()
+        
+        if not pending_reqs:
+            st.info("現在、未処理の申請はありません。すべて対応済みです！🎉")
+        else:
+            for req in pending_reqs:
+                with st.container():
+                    st.markdown(f"<h4 style='margin:0; padding:0; color:#0f172a;'>{req['card_number']} ： {req['card_name']}</h4>", unsafe_allow_html=True)
+                    
+                    # タイムスタンプを綺麗に整えて表示
+                    created_time = req['created_at'][:16].replace('T', ' ')
+                    st.caption(f"申請日時: {created_time}")
+                    
+                    # 完了ボタン
+                    if st.button("✅ 追加完了（リストから消す）", key=f"resolve_{req['id']}"):
+                        if update_request_status(req['id'], "completed"):
+                            st.success("対応済みに変更しました！")
+                            time.sleep(1)
+                            st.rerun()
+                            
+                    st.markdown("<hr style='margin: 10px 0; border:none; border-top: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
